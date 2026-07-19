@@ -1,0 +1,17 @@
+{
+  "name": "pixelvif",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:desktop": "npm run tauri dev --workspace=apps/desktop",
+    "dev:server": "npm run dev --workspace=apps/server",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint ."
+  }
+}
