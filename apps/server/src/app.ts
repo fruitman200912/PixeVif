@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import type { ApiError } from "@pixelvif/shared";
 
 const app = express();
 
@@ -12,7 +13,7 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response<ApiError>, _next: NextFunction) => {
   res.status(500).json({ success: false, error: err.message });
 });
 
