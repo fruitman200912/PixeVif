@@ -35,5 +35,10 @@ apps/desktop/src-tauri/gen/
 # Testing / coverage
 coverage/
 
+# TypeScript build cache / composite build output
+*.tsbuildinfo
+apps/desktop/vite.config.js
+apps/desktop/vite.config.d.ts
+
 # Misc
 *.local
