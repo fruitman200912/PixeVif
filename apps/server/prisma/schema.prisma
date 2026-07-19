@@ -1,0 +1,239 @@
+// PixelVif 데이터베이스 스키마
+// 원본 설계: PixelVif 데이터베이스 설계서 v1.0 (PostgreSQL 16)
+//
+// NOTE: 다음 DB-level CHECK 제약은 Prisma schema DSL이 네이티브로 지원하지 않는다.
+// `prisma migrate dev --create-only`로 생성된 SQL에 마이그레이션 적용 전 수동으로 추가할 것:
+//   - projects: CHECK (width BETWEEN 16 AND 256), CHECK (height BETWEEN 16 AND 256)
+//   - layers:   CHECK (opacity BETWEEN 0 AND 100)
+// (애플리케이션 레벨 Zod 검증과는 별개로 DB 레벨 방어선을 유지하기 위함)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AuthProvider {
+  local
+  google
+
+  @@map("auth_provider")
+}
+
+enum UserPlan {
+  free
+  pro
+  team
+
+  @@map("user_plan")
+}
+
+enum ProjectStyle {
+  rpg
+  platformer
+  topdown
+  custom
+
+  @@map("project_style")
+}
+
+enum MemberRole {
+  owner
+  editor
+  viewer
+
+  @@map("member_role")
+}
+
+enum AiStatus {
+  queued
+  processing
+  completed
+  failed
+
+  @@map("ai_status")
+}
+
+enum AiTarget {
+  new_layer
+  overwrite
+
+  @@map("ai_target")
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique @db.VarChar(255)
+  passwordHash String?      @map("password_hash") @db.VarChar(255)
+  username     String       @unique @db.VarChar(20)
+  provider     AuthProvider @default(local)
+  providerId   String?      @map("provider_id") @db.VarChar(255)
+  plan         UserPlan     @default(free)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  refreshTokens  RefreshToken[]
+  ownedProjects  Project[]       @relation("ProjectOwner")
+  memberships    ProjectMember[]
+  aiGenerations  AiGeneration[]
+  createdInvites Invite[]
+
+  @@unique([provider, providerId], map: "idx_users_provider")
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_refresh_user")
+  @@index([expiresAt], map: "idx_refresh_expires")
+  @@map("refresh_tokens")
+}
+
+model Project {
+  id         String       @id @default(uuid()) @db.Uuid
+  title      String       @db.VarChar(50)
+  ownerId    String       @map("owner_id") @db.Uuid
+  // CHECK (width BETWEEN 16 AND 256) -- 마이그레이션 SQL에 수동 추가 필요
+  width      Int
+  // CHECK (height BETWEEN 16 AND 256) -- 마이그레이션 SQL에 수동 추가 필요
+  height     Int
+  style      ProjectStyle @default(custom)
+  colorLimit Int          @default(16) @map("color_limit")
+  palette    Json?
+  isPublic   Boolean      @default(false) @map("is_public")
+  views      Int          @default(0)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       ProjectMember[]
+  layers        Layer[]
+  canvasStates  CanvasState[]
+  aiGenerations AiGeneration[]
+  invites       Invite[]
+  tags          ProjectTag[]
+
+  @@index([ownerId], map: "idx_projects_owner")
+  @@index([isPublic, createdAt(sort: Desc)], map: "idx_projects_public_recent")
+  @@index([isPublic, views(sort: Desc)], map: "idx_projects_public_views")
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String     @id @default(uuid()) @db.Uuid
+  projectId String     @map("project_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  role      MemberRole @default(viewer)
+  joinedAt  DateTime   @default(now()) @map("joined_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId], map: "idx_members_user")
+  @@map("project_members")
+}
+
+model Layer {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  name       String   @default("Layer") @db.VarChar(50)
+  orderIndex Int      @default(0) @map("order_index")
+  visible    Boolean  @default(true)
+  // CHECK (opacity BETWEEN 0 AND 100) -- 마이그레이션 SQL에 수동 추가 필요
+  opacity    Int      @default(100)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // 논리적으로 1:1이지만 DDL은 (project_id, layer_id) 복합 UNIQUE만 강제한다.
+  // layer_id 단독 UNIQUE는 설계에 없으므로 임의로 추가하지 않고 다건 관계로 둔다.
+  canvasStates CanvasState[]
+
+  @@index([projectId, orderIndex], map: "idx_layers_project")
+  @@map("layers")
+}
+
+model CanvasState {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  layerId   String   @map("layer_id") @db.Uuid
+  data      Bytes
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  layer   Layer   @relation(fields: [layerId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, layerId])
+  @@map("canvas_states")
+}
+
+model AiGeneration {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  prompt      String
+  finalPrompt String?  @map("final_prompt")
+  target      AiTarget @default(new_layer)
+  status      AiStatus @default(queued)
+  resultUrl   String?  @map("result_url") @db.VarChar(500)
+  cacheKey    String?  @map("cache_key") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_ai_user_created")
+  @@index([cacheKey], map: "idx_ai_cache")
+  @@map("ai_generations")
+}
+
+model Invite {
+  id        String     @id @default(uuid()) @db.Uuid
+  projectId String     @map("project_id") @db.Uuid
+  token     String     @unique @db.VarChar(64)
+  role      MemberRole @default(editor)
+  createdBy String     @map("created_by") @db.Uuid
+  expiresAt DateTime   @map("expires_at") @db.Timestamptz
+  oneTime   Boolean    @default(false) @map("one_time")
+  used      Boolean    @default(false)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_invites_project")
+  @@map("invites")
+}
+
+model Tag {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique @db.VarChar(30)
+
+  projects ProjectTag[]
+
+  @@map("tags")
+}
+
+model ProjectTag {
+  projectId String @map("project_id") @db.Uuid
+  tagId     String @map("tag_id") @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+  @@index([tagId], map: "idx_project_tags_tag")
+  @@map("project_tags")
+}
