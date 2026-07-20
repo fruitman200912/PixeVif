@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+target
+apps/desktop/src-tauri
+apps/server/src/generated
+coverage
+package-lock.json
