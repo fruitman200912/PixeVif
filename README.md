@@ -39,6 +39,10 @@ cp apps/server/.env.example apps/server/.env
 
 ### 1. DB/캐시 기동 (PostgreSQL 16 + Redis 7)
 
+로컬에 이미 Postgres/Redis가 설치되어 있는 경우 기본 포트(5432/6379)와 충돌할 수 있어
+호스트 포트를 각각 **5433**, **6380**으로 매핑해 두었다 (`docker-compose.yml`).
+`apps/server/.env`의 `DATABASE_URL`/`REDIS_URL`도 이 포트를 사용한다.
+
 ```bash
 npm run db:up      # 기동
 npm run db:down    # 중지 및 컨테이너 제거 (데이터는 volume에 유지)
@@ -81,9 +85,8 @@ pixelvif/
 
 ## 다음 단계
 
-- [ ] `apps/server/prisma/schema.prisma` 검토 (완료됨 — 10개 모델 확정)
-- [ ] 첫 마이그레이션 실행: `cd apps/server && npx prisma migrate dev --name init`
-  - 마이그레이션 SQL 생성 후 `width`/`height`/`opacity` CHECK 제약을 수동으로 추가해야 함 (스키마 파일 상단 주석 참고)
+- [x] `apps/server/prisma/schema.prisma` 검토 (완료 — 10개 모델 확정)
+- [x] 첫 마이그레이션 실행 완료 (`prisma/migrations/20260721135813_init`, CHECK 제약 수동 반영됨)
 - [ ] `FR-AUTH-01`(회원가입)부터 TDD 시작 (서버)
 - [ ] 인증 UI를 데스크톱 앱에 연결
 - [ ] 이후 기능 명세 우선순위(P0 → P1 → P2) 순서로 진행

@@ -1,11 +1,13 @@
 // PixelVif 데이터베이스 스키마
 // 원본 설계: PixelVif 데이터베이스 설계서 v1.0 (PostgreSQL 16)
 //
-// NOTE: 다음 DB-level CHECK 제약은 Prisma schema DSL이 네이티브로 지원하지 않는다.
-// `prisma migrate dev --create-only`로 생성된 SQL에 마이그레이션 적용 전 수동으로 추가할 것:
+// NOTE: 다음 DB-level CHECK 제약은 Prisma schema DSL이 네이티브로 지원하지 않아
+// migrations/20260721135813_init/migration.sql 끝부분에 수동으로 추가했다:
 //   - projects: CHECK (width BETWEEN 16 AND 256), CHECK (height BETWEEN 16 AND 256)
 //   - layers:   CHECK (opacity BETWEEN 0 AND 100)
 // (애플리케이션 레벨 Zod 검증과는 별개로 DB 레벨 방어선을 유지하기 위함)
+// 이 컬럼들을 건드리는 향후 마이그레이션에서는 --create-only로 생성한 SQL에
+// 동일한 CHECK 제약이 유지되는지 확인할 것 (Prisma가 자동으로 보존하지 않음).
 
 generator client {
   provider = "prisma-client"
